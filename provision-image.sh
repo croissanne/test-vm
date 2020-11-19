@@ -3,11 +3,10 @@
 set -e
 
 OUTPUTDIR=$1
-RELEASE=$2
 
-if [ -z "$OUTPUTDIR" ] || [ -z "$RELEASE" ]; then
+if [ -z "$OUTPUTDIR" ]; then
         echo "Usage:"
-        echo "  $./provision-image.sh <output dir> <release>"
+        echo "  $./provision-image.sh <output dir>"
 	echo
 	echo "Example:"
         echo "  $./provision-image.sh images/ f31"
@@ -15,21 +14,14 @@ if [ -z "$OUTPUTDIR" ] || [ -z "$RELEASE" ]; then
 fi
 
 OUTPUTDIR=$(realpath "${OUTPUTDIR}")
-IMAGE="${RELEASE}.qcow2"
-
-if [ "${RELEASE}" == "fedora-31" ]; then
-	URL="https://download.fedoraproject.org/pub/fedora/linux/releases/31/Cloud/x86_64/images/Fedora-Cloud-Base-31-1.9.x86_64.qcow2"
-elif [ "${RELEASE}" == "fedora-32" ]; then
-	URL="https://download.fedoraproject.org/pub/fedora/linux/releases/32/Cloud/x86_64/images/Fedora-Cloud-Base-32-1.6.x86_64.qcow2"
-else
-	echo "Invalid release ${RELEASE}"
-	exit 1
-fi
+DISTRO="fedora-41"
+DVER="${DISTRO#fedora-}"
+URL="https://fedora.cu.be/linux/releases/$DVER/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-$DVER-1.4.x86_64.qcow2"
+IMAGE="$DISTRO.qcow2"
 
 mkdir -p "${OUTPUTDIR}"
-
 curl -L "${URL}" -o "${OUTPUTDIR}/${IMAGE}.partial"
-qemu-img resize "${OUTPUTDIR}/${IMAGE}.partial" 10G
+qemu-img resize "${OUTPUTDIR}/${IMAGE}.partial" 80G
 genisoimage \
         -quiet \
 	-input-charset utf-8 \
@@ -38,10 +30,9 @@ genisoimage \
 	-joliet \
 	-rock \
 	ci-provision
-qemu-kvm \
-	-m 2048 \
-	-cpu host \
-	-nographic \
-	-cdrom cloudinit.iso \
-	"${OUTPUTDIR}/${IMAGE}.partial"
+
 mv "${OUTPUTDIR}/${IMAGE}.partial" "${OUTPUTDIR}/${IMAGE}"
+
+qemu-img create \
+         -o backing_file="$DISTRO".qcow2,backing_fmt=qcow2 -f qcow2 \
+         "$OUTPUTDIR/$DISTRO"-overlay.qcow2
